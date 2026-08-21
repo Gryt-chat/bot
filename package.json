@@ -1,0 +1,42 @@
+{
+  "name": "@gryt/bot",
+  "version": "0.1.0",
+  "description": "Write Gryt bots in TypeScript.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gryt-chat/bot.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types \"src/**/*.test.ts\"",
+    "lint": "eslint src examples",
+    "example:ping": "node --experimental-strip-types examples/ping.ts"
+  },
+  "dependencies": {
+    "jose": "^6.1.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^22.20.1",
+    "eslint": "^9.39.2",
+    "globals": "^17.11.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.0"
+  }
+}
