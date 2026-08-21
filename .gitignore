@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+# Where a bot's key ends up by default. It is the bot's identity — losing it
+# means the server sees a different member, and committing it means anybody
+# with the repository is that bot.
+gryt-bot-identity.json
