@@ -117,9 +117,12 @@ bot.on("ready", (info) => {
 bot.on("error", (err) => console.error("[gryt]", err.message));
 bot.on("disconnected", (why) => console.warn("[gryt] disconnected:", why));
 
-// Deliberately not awaited: on a first run there is nobody to answer yet, and
-// the bot should sit at the door rather than exit.
-void bot.start();
+// Not awaited: on a first run there is nobody to answer yet, and the bot should
+// sit at the door rather than exit. The catch is not optional — `start()`
+// rejects when the server refuses, and an unhandled rejection takes the process
+// down. Every refusal has already been reported through `error` above, so there
+// is nothing to do here but let it be handled.
+bot.start().catch(() => {});
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {

@@ -1,25 +1,20 @@
 # A Gryt bot, as a container.
 #
-# Built from the repository root so it can use the SDK sitting next to it:
+#   docker build -t my-support-bot .
 #
-#   docker build -f examples/support-bot/Dockerfile -t my-support-bot .
-#
-# Once @gryt/bot is on npm this can be a two-line Dockerfile with the example
-# folder as its context. Until then it needs the SDK source.
+# The example folder is the whole build context: @gryt/bot comes from npm like
+# any other dependency, so nothing outside this directory is needed. Copy the
+# folder somewhere else and it still builds.
 FROM node:22-alpine
 
 WORKDIR /app
 
-# The SDK first, so a change to the bot's own code does not reinstall it.
-COPY package.json yarn.lock ./
-COPY src ./src
-RUN yarn install --frozen-lockfile --production=false && yarn build
+# Dependencies first, so editing the bot does not reinstall them.
+COPY package.json ./
+RUN npm install --omit=dev
 
-WORKDIR /app/bot
-COPY examples/support-bot/package.json ./
-COPY examples/support-bot/faq.json ./
-COPY examples/support-bot/src ./src
-RUN yarn install
+COPY faq.json ./
+COPY src ./src
 
 # Where the identity lives. Mount a volume here or the bot is a stranger on
 # every restart — see the compose file next door.
