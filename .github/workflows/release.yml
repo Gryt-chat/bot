@@ -1,35 +1,32 @@
 name: Release
 
-# Dispatched, not automatic — the same shape as @gryt/voice, and for the same
-# reasons: no changesets, one maintainer, and consumers that pin a version
-# deliberately. You pick it when you mean it.
+# Changesets, the way @gryt/ui does it. A pull request that changes the package
+# carries a changeset saying what kind of change it is; this collects them into
+# a "Version Packages" pull request, and publishes when that is merged.
+#
+# It replaced a dispatched workflow lifted from @gryt/voice, where you picked
+# patch or minor from a dropdown at release time. That suits a package whose
+# consumer pins a version deliberately. It does not suit this one: the pull
+# request already knew whether it was a breaking change, and asking again days
+# later — from a dropdown, with the diff no longer in front of you — is asking
+# the same question in the worse place.
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'npm version argument: patch, minor, major, or an exact version like 0.1.0'
-        required: true
-        default: patch
-      tag:
-        description: 'npm dist-tag'
-        required: true
-        default: latest
-        type: choice
-        options: [latest, beta, next]
-
-# Releases queue rather than race. Two dispatches at once is how a version once
-# reached npm with no commit behind it, and cancelling one mid-publish is worse
-# than waiting.
-concurrency:
-  group: release
-  cancel-in-progress: false
+  push:
+    branches: [main]
 
 permissions:
   contents: write
-  # Trusted publishing. There is no NPM_TOKEN in this repository and there
-  # should not be one — npm mints a short-lived credential from this instead.
+  pull-requests: write
+  # Required for npm trusted publishing. Without it the OIDC token is never
+  # minted and npm falls back to looking for a credential, so a publish that is
+  # meant to be tokenless fails as though the token were missing — which is a
+  # confusing way to find out.
   id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -47,16 +44,17 @@ jobs:
       # OIDC publishing needs npm 11.5.1 or newer, ahead of what Node 24 ships.
       - run: npm install -g npm@latest
 
-      - run: npm install
+      - run: yarn install --frozen-lockfile
 
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: yarn lint
+      - run: yarn typecheck
+      - run: yarn test
+      - run: yarn build
 
-      # The lesson @gryt/voice learned the expensive way: tsc being happy is not
-      # the same as Node being able to load the result. This imports the real
-      # dist, the way somebody installing the package would.
+      # Before the publish rather than after it, because a version cannot be
+      # replaced once it is on npm. tsc being happy is not the same as Node
+      # being able to load the result — @gryt/voice learned that expensively in
+      # GRYT-344 — so this imports the real dist the way an installer would.
       - name: Check the built package actually loads
         run: |
           node -e "
@@ -71,39 +69,10 @@ jobs:
             }).catch((e) => { console.error(e); process.exit(1); });
           "
 
-      - name: Set the version
-        id: version
-        run: |
-          # --allow-same-version because the first release of a package is the
-          # one case where the version in package.json is already the version
-          # you mean. Without it, publishing 0.1.0 from a repository sitting at
-          # 0.1.0 fails before it reaches npm — which is exactly how this
-          # workflow failed the first time it was run.
-          npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
-          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Publish
-        run: npm publish --provenance --access public --tag "${{ inputs.tag }}"
-
-      - name: Commit and tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Nothing to commit when the version was already right, which is the
-          # first release. The tag and the push below still have to happen.
-          git commit -am "release: v${{ steps.version.outputs.version }} [skip ci]" || \
-            echo "package.json was already at this version, tagging the current commit."
-
-          # Annotated, because --follow-tags ignores lightweight tags.
-          git tag -a "v${{ steps.version.outputs.version }}" \
-            -m "v${{ steps.version.outputs.version }}"
-
-          # The publish above cannot be undone, so this must not fail on a busy
-          # main. Rebase onto whatever landed while the build ran.
-          git pull --rebase origin main
-          git push origin HEAD:main --follow-tags
-
-      - name: Summary
-        run: |
-          echo "Published @gryt/bot@${{ steps.version.outputs.version }} to the ${{ inputs.tag }} tag." >> "$GITHUB_STEP_SUMMARY"
+      - uses: changesets/action@v1
+        with:
+          publish: yarn release
+          title: "Version Packages"
+          commit: "release: version packages [skip ci]"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
