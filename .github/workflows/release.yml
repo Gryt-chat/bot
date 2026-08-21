@@ -74,7 +74,12 @@ jobs:
       - name: Set the version
         id: version
         run: |
-          npm version "${{ inputs.version }}" --no-git-tag-version
+          # --allow-same-version because the first release of a package is the
+          # one case where the version in package.json is already the version
+          # you mean. Without it, publishing 0.1.0 from a repository sitting at
+          # 0.1.0 fails before it reaches npm — which is exactly how this
+          # workflow failed the first time it was run.
+          npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Publish
@@ -84,7 +89,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "release: v${{ steps.version.outputs.version }} [skip ci]"
+
+          # Nothing to commit when the version was already right, which is the
+          # first release. The tag and the push below still have to happen.
+          git commit -am "release: v${{ steps.version.outputs.version }} [skip ci]" || \
+            echo "package.json was already at this version, tagging the current commit."
 
           # Annotated, because --follow-tags ignores lightweight tags.
           git tag -a "v${{ steps.version.outputs.version }}" \
