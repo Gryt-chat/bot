@@ -60,8 +60,17 @@ export interface ServerInfo {
   role: string;
 }
 
-/** Why a join was refused, when the server bothered to say. */
-export interface JoinRefusal {
-  code: string;
-  message: string;
+/**
+ * Why the server refused something.
+ *
+ * The machine-readable half is `error`, which is what the server actually
+ * sends; `code` is accepted too because it is the name half of this SDK reached
+ * for first and getting it wrong turned "waiting to be approved" into a crash.
+ */
+export interface ServerRefusal {
+  error?: string;
+  code?: string;
+  message?: string;
+  /** Named when the refusal was a permission. */
+  permission?: string;
 }

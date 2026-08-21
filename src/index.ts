@@ -8,7 +8,7 @@ export type { BotIdentity } from "./identity.ts";
 export type {
   Attachment,
   Channel,
-  JoinRefusal,
+  ServerRefusal,
   Member,
   Message,
   Permission,

@@ -27,7 +27,7 @@ describe("a bot's identity", () => {
       const first = await loadIdentity(path);
       const second = await loadIdentity(path);
       assert.equal(first.subject, second.subject);
-      assert.match(first.subject, /^key:/);
+      assert.match(first.subject, /^BOT_/, "lands in the bot namespace");
     })();
   });
 
@@ -66,7 +66,8 @@ describe("a bot's identity", () => {
 
     assert.equal(decodeProtectedHeader(cert).alg, "ES256");
     const claims = decodeJwt(cert);
-    assert.equal(claims.iss, "gryt:self");
+    // Its own issuer, which is what puts it in its own tier server-side.
+    assert.equal(claims.iss, "gryt:bot");
     assert.equal(claims.sub, identity.subject);
   });
 

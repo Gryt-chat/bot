@@ -16,7 +16,7 @@ import { PERMISSIONS_BEFORE_CATALOGUE } from "./permissions.ts";
 import type {
   Attachment,
   Channel,
-  JoinRefusal,
+  ServerRefusal,
   Member,
   Message,
   Permission,
@@ -32,8 +32,29 @@ export interface GrytBotOptions {
   identityPath?: string;
   /** An already-loaded identity, if you keep the key somewhere of your own. */
   identity?: BotIdentity;
-  /** Needed unless the server's join policy is `open`. */
-  inviteCode?: string;
+  /**
+   * What this bot is asking to be allowed to do.
+   *
+   * Sent once, the first time it turns up at a server, and shown to whoever
+   * approves it. Ask for the least that makes the bot work: an operator looking
+   * at a long list is being asked to trust more than they can check, and the
+   * ones they untick are the ones you will find out about.
+   *
+   * **It is fixed from then on.** A later run declaring more gets the answer to
+   * the question the first one asked — which is the point, because the run
+   * asking for more may not be yours.
+   */
+  wants?: string[];
+  /** One line, shown beside the ask. Say what the bot is for. */
+  description?: string;
+  /**
+   * A token from a registration an operator set up in advance.
+   *
+   * The unattended path: no approval to wait for, because the approving already
+   * happened. Single-use — the first bot to present it becomes that
+   * registration.
+   */
+  botToken?: string;
   /** The command prefix. Set to "" to turn the router off entirely. */
   prefix?: string;
   /** Whether to answer `help` with a listing. On by default. */
@@ -49,6 +70,8 @@ export interface GrytBotEvents {
   channels: [Channel[]];
   /** Something the server refused. Always worth logging; often a permission. */
   error: [Error];
+  /** Turned away pending approval. Not an error — see the note in `wire`. */
+  waiting: [string];
   disconnected: [string];
 }
 
@@ -114,6 +137,7 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   private serverKnows = new Set<Permission>(PERMISSIONS_BEFORE_CATALOGUE);
   private serverUserId: string | null = null;
   private stopped = false;
+  private announcedWait = false;
 
   constructor(options: GrytBotOptions) {
     super();
@@ -180,7 +204,13 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
 
   // ── Lifecycle ─────────────────────────────────────────────────────
 
-  /** Connect, join, and resolve once the server has said who this bot is. */
+  /**
+   * Connect, join, and resolve once the server has said who this bot is.
+   *
+   * On a first run against a server that has not approved it, this does not
+   * resolve — the bot is waiting at the door, which is a state and not a
+   * failure. Listen for `waiting`, and for `ready` when somebody answers.
+   */
   async start(): Promise<ServerInfo> {
     this.identity =
       this.options.identity ??
@@ -328,19 +358,38 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
       void this.runCommands(message);
     });
 
-    socket.on("server:error", (payload: JoinRefusal | string) => {
+    socket.on("server:error", (payload: ServerRefusal | string) => {
+      const code = typeof payload === "string" ? "" : payload?.error ?? payload?.code;
+
+      // Waiting to be let in is the ordinary first run, not a failure. A bot
+      // that crashed here would restart, knock again, and fill the operator's
+      // screen with the same request — so it says so once and keeps the socket,
+      // and the approval arrives as a `server:details` without a reconnect.
+      if (code === "bot_not_approved") {
+        if (!this.announcedWait) {
+          this.announcedWait = true;
+          this.emit(
+            "waiting",
+            (typeof payload === "string" ? payload : payload.message) ??
+              "Waiting to be approved by a server admin.",
+          );
+        }
+        return;
+      }
+
       this.emit("error", this.toError(payload));
     });
 
-    socket.on("chat:error", (payload: JoinRefusal | string) => {
+    socket.on("chat:error", (payload: ServerRefusal | string) => {
       this.emit("error", this.toError(payload));
     });
   }
 
-  private toError(payload: JoinRefusal | string): Error {
+  private toError(payload: ServerRefusal | string): Error {
     if (typeof payload === "string") return new Error(payload);
-    const err = new Error(payload?.message || payload?.code || "Server refused");
-    (err as Error & { code?: string }).code = payload?.code;
+    const code = payload?.error ?? payload?.code;
+    const err = new Error(payload?.message || code || "Server refused");
+    (err as Error & { code?: string }).code = code;
     return err;
   }
 
@@ -348,7 +397,11 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     if (this.stopped) return;
     socket.emit("server:join", {
       nickname: this.options.nickname ?? "Bot",
-      inviteCode: this.options.inviteCode,
+      bot: {
+        permissions: this.options.wants ?? [],
+        description: this.options.description,
+        claimToken: this.options.botToken,
+      },
     });
   }
 
@@ -359,20 +412,11 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     const identity = this.identity;
     if (!identity) return;
 
-    // The server says which identity tiers it takes, in the challenge itself.
-    // Checking here turns the most common deployment mistake from "certificate
-    // rejected" into a sentence naming the environment variable to change.
-    if (challenge.identityTiers && !challenge.identityTiers.includes("local")) {
-      this.emit(
-        "error",
-        new Error(
-          `${this.host} does not accept self-signed identities, which is the only kind a bot has. ` +
-            `The operator needs GRYT_IDENTITY_TIERS to include "local" ` +
-            `(it currently accepts: ${challenge.identityTiers.join(", ")}).`,
-        ),
-      );
-      return;
-    }
+    // Nothing to check here any more. Bots are admitted by an operator
+    // answering them, not by the server's setting for anonymous people — which
+    // is the whole reason they were given a tier of their own. Adding a bot no
+    // longer means opening the door to every stranger, and no longer needs a
+    // server restart.
 
     try {
       const [certificate, assertion] = await Promise.all([
