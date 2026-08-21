@@ -44,10 +44,8 @@ GRYT_HOST=chat.example.com yarn start
 | What it asks for | `wants` in `src/index.ts` |
 | What it is called | `GRYT_NICKNAME`, until an admin renames it |
 
-If you copy this folder out of the repository, change one line in
-`package.json`: `"@gryt/bot": "file:../.."` becomes `"@gryt/bot": "^0.1.0"`. It
-points at the local SDK so the example runs from a fresh clone with nothing
-published.
+Nothing here depends on the rest of the repository — `@gryt/bot` comes from npm
+— so copying the folder somewhere else is all it takes.
 
 ## Two things to get right
 

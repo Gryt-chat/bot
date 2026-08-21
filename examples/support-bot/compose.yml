@@ -5,10 +5,7 @@
 # GRYT_HOST is where your server is. Everything else has a sensible default.
 services:
   support-bot:
-    build:
-      # The repository root, because the image needs the SDK next door.
-      context: ../..
-      dockerfile: examples/support-bot/Dockerfile
+    build: .
     container_name: gryt-support-bot
     restart: unless-stopped
     environment:

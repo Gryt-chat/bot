@@ -10,7 +10,6 @@
     "start": "node --experimental-strip-types src/index.ts"
   },
   "dependencies": {
-    "//": "COPYING THIS OUT OF THE REPOSITORY? Change the line below to \"@gryt/bot\": \"^0.1.0\". It points at the local SDK so the example runs from a fresh clone with nothing published.",
-    "@gryt/bot": "file:../.."
+    "@gryt/bot": "^0.1.0"
   }
 }
