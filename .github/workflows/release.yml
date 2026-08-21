@@ -1,0 +1,100 @@
+name: Release
+
+# Dispatched, not automatic — the same shape as @gryt/voice, and for the same
+# reasons: no changesets, one maintainer, and consumers that pin a version
+# deliberately. You pick it when you mean it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'npm version argument: patch, minor, major, or an exact version like 0.1.0'
+        required: true
+        default: patch
+      tag:
+        description: 'npm dist-tag'
+        required: true
+        default: latest
+        type: choice
+        options: [latest, beta, next]
+
+# Releases queue rather than race. Two dispatches at once is how a version once
+# reached npm with no commit behind it, and cancelling one mid-publish is worse
+# than waiting.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  # Trusted publishing. There is no NPM_TOKEN in this repository and there
+  # should not be one — npm mints a short-lived credential from this instead.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # OIDC publishing needs npm 11.5.1 or newer, ahead of what Node 24 ships.
+      - run: npm install -g npm@latest
+
+      - run: npm install
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # The lesson @gryt/voice learned the expensive way: tsc being happy is not
+      # the same as Node being able to load the result. This imports the real
+      # dist, the way somebody installing the package would.
+      - name: Check the built package actually loads
+        run: |
+          node -e "
+            import('./dist/index.js').then((m) => {
+              const wanted = ['GrytBot', 'loadIdentity', 'createIdentity', 'parseCommand', 'splitArgs', 'PERMISSIONS_BEFORE_CATALOGUE'];
+              const missing = wanted.filter((n) => !(n in m));
+              if (missing.length) {
+                console.error('Missing from the built package:', missing.join(', '));
+                process.exit(1);
+              }
+              console.log('dist exports:', Object.keys(m).sort().join(', '));
+            }).catch((e) => { console.error(e); process.exit(1); });
+          "
+
+      - name: Set the version
+        id: version
+        run: |
+          npm version "${{ inputs.version }}" --no-git-tag-version
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        run: npm publish --provenance --access public --tag "${{ inputs.tag }}"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "release: v${{ steps.version.outputs.version }} [skip ci]"
+
+          # Annotated, because --follow-tags ignores lightweight tags.
+          git tag -a "v${{ steps.version.outputs.version }}" \
+            -m "v${{ steps.version.outputs.version }}"
+
+          # The publish above cannot be undone, so this must not fail on a busy
+          # main. Rebase onto whatever landed while the build ran.
+          git pull --rebase origin main
+          git push origin HEAD:main --follow-tags
+
+      - name: Summary
+        run: |
+          echo "Published @gryt/bot@${{ steps.version.outputs.version }} to the ${{ inputs.tag }} tag." >> "$GITHUB_STEP_SUMMARY"
