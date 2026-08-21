@@ -1,0 +1,27 @@
+# The whole deployment. Two things matter here.
+#
+#   docker compose up -d && docker compose logs -f
+#
+# GRYT_HOST is where your server is. Everything else has a sensible default.
+services:
+  support-bot:
+    build:
+      # The repository root, because the image needs the SDK next door.
+      context: ../..
+      dockerfile: examples/support-bot/Dockerfile
+    container_name: gryt-support-bot
+    restart: unless-stopped
+    environment:
+      GRYT_HOST: ${GRYT_HOST:?set GRYT_HOST to your server, e.g. chat.example.com}
+      GRYT_NICKNAME: ${GRYT_NICKNAME:-Support}
+      # Only when an admin made the registration in advance. Leave it unset and
+      # the bot knocks instead, which is the normal way in.
+      GRYT_BOT_TOKEN: ${GRYT_BOT_TOKEN:-}
+    volumes:
+      # The one thing you must not lose. This file *is* the bot: keep it and the
+      # bot keeps its permissions across restarts and upgrades; lose it and the
+      # server sees a stranger asking to join, with nothing granted.
+      - support-bot-identity:/data
+
+volumes:
+  support-bot-identity:
