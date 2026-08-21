@@ -13,35 +13,44 @@ import {
 /**
  * A bot's identity is a key it holds, and nothing else.
  *
- * Gryt servers accept two kinds of certificate. One is signed by a certificate
- * authority that has authenticated a person; the other is signed by the very
- * key it describes, and the identity is derived from that key's thumbprint. The
- * second is what a bot uses. There is no person to authenticate, and asking a
- * bot to hold an account's credentials would mean putting a human's identity in
- * a container's environment.
+ * A bot signs its own certificate with the key it holds, and the server derives
+ * the identity from that key's thumbprint. There is no person to authenticate,
+ * and asking a bot to hold an account's credentials would mean putting a
+ * human's identity in a container's environment.
  *
- * Two consequences worth knowing before you deploy one:
+ * Bots have their own certificate issuer and their own subject namespace, so a
+ * bot can never hold an id a person could hold, and every surface that shows a
+ * member can say which it is without looking anything up.
  *
- * - **The key file is the bot.** Lose it and the server sees a stranger with
- *   the same nickname, holding whatever role a stranger gets. Keep it, back it
- *   up, and do not commit it.
- * - **The server has to accept the tier.** `GRYT_IDENTITY_TIERS` must include
- *   `local`, which is not the default. A bot cannot talk its way past that, and
- *   this SDK says so plainly rather than letting the join fail as
- *   "certificate rejected".
+ * One consequence worth knowing before you deploy one: **the key file is the
+ * bot.** Lose it and the server sees a stranger asking to join, with none of
+ * the permissions the one before it was given. Keep it, back it up, do not
+ * commit it.
  */
 
-/** The `iss` a self-signed certificate must carry. The server dispatches on it. */
-const SELF_ISSUER = "gryt:self";
+/**
+ * The `iss` a bot's certificate carries.
+ *
+ * Cryptographically identical to a person's self-signed certificate — a key
+ * signing for itself — and a separate issuer on purpose. The server dispatches
+ * on it, and that is what puts a bot in its own subject namespace and its own
+ * tier. A bot is admitted by the operator answering it, never by the server's
+ * setting for anonymous people.
+ */
+const BOT_ISSUER = "gryt:bot";
 
 /**
- * The prefix the server puts on every identity derived from a key.
+ * The prefix the server puts on every bot identity.
  *
  * Written down here only so this SDK can show you the id your bot will have
  * before it has ever connected. The server derives it independently and ignores
  * anything the certificate claims.
+ *
+ * Loud and upper case for a reason: this string turns up in audit rows and
+ * support conversations, and the question it has to answer instantly is whether
+ * what did the thing was a person.
  */
-const LOCAL_SUB_PREFIX = "key:";
+const BOT_SUB_PREFIX = "BOT_";
 
 export interface BotIdentity {
   /** The id this bot will be known by on every server. Derived from the key. */
@@ -74,7 +83,7 @@ async function fromJwk(privateJwk: JWK): Promise<BotIdentity> {
   };
 
   const thumbprint = await calculateJwkThumbprint(publicJwk, "sha256");
-  const subject = `${LOCAL_SUB_PREFIX}${thumbprint}`;
+  const subject = `${BOT_SUB_PREFIX}${thumbprint}`;
 
   return {
     subject,
@@ -82,7 +91,7 @@ async function fromJwk(privateJwk: JWK): Promise<BotIdentity> {
     certificate: () =>
       new SignJWT({ jwk: publicJwk })
         .setProtectedHeader({ alg: "ES256" })
-        .setIssuer(SELF_ISSUER)
+        .setIssuer(BOT_ISSUER)
         // The server derives the subject from the key and ignores this. It is
         // set to the derived value anyway, so a certificate read by a human
         // says the same thing the server concluded.
