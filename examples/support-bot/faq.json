@@ -1,0 +1,7 @@
+{
+  "voice": "Voice runs through an SFU, so you need one reachable from wherever people are. See https://docs.gryt.chat/docs/sfu — the usual cause of silence is a port that is open on the host and not in the container.",
+  "invite": "Server settings → Invites. Codes can be single-use or unlimited, and can expire. Anyone with the code gets in, so treat an unlimited one like a password.",
+  "roles": "Server settings → Role editor. A role is a set of permissions and a rank: permissions are what somebody may do, rank is who they may act on.",
+  "guest": "Set the guest joining default to a read-only role in the Role editor. Guests are people who joined without an account — their key is their identity.",
+  "backup": "Everything lives in the server's data directory. Stop the container, copy it, start it again. There is no export button yet."
+}
