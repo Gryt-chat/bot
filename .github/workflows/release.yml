@@ -77,6 +77,12 @@ jobs:
       # trigger, and so the merge that is supposed to publish does nothing at
       # all. @gryt/bot 0.1.1 sat versioned on main and unpublished because of
       # it, and nothing failed — there was simply no run.
+      #
+      # The marker counts anywhere in a commit message, body included, and a
+      # squash merge concatenates the branch's messages into that body. The
+      # commit that removed it from this line quoted it while explaining the
+      # bug, and suppressed its own release run the same way. Say "the skip
+      # marker" in anything that will end up on main.
       - uses: changesets/action@v1
         with:
           publish: yarn release
