@@ -69,10 +69,18 @@ jobs:
             }).catch((e) => { console.error(e); process.exit(1); });
           "
 
+      # The version-bump commit's message, and no `[skip ci]` in it.
+      #
+      # It reads like it only applies to the release pull request's own branch,
+      # where skipping CI is harmless. It does not: squash-merging that pull
+      # request puts this exact message on main, main is this workflow's only
+      # trigger, and so the merge that is supposed to publish does nothing at
+      # all. @gryt/bot 0.1.1 sat versioned on main and unpublished because of
+      # it, and nothing failed — there was simply no run.
       - uses: changesets/action@v1
         with:
           publish: yarn release
           title: "Version Packages"
-          commit: "release: version packages [skip ci]"
+          commit: "release: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
