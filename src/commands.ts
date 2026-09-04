@@ -1,13 +1,7 @@
 import type { Message, Permission } from "./types.ts";
 
-/**
- * The command router.
- *
- * A prefix, a word, and the rest of the line. That is the whole model, and it
- * is deliberately not more: a bot that wants flags and quoting can parse
- * `ctx.rest` however it likes, and a router that tried to guess would be wrong
- * for half of them.
- */
+/* A prefix, a word, and the rest of the line. Anything wanting flags or
+   quoting parses `ctx.rest` itself. */
 
 export interface CommandContext {
   /** The message that invoked it. */
