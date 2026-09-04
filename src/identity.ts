@@ -11,21 +11,12 @@ import {
 } from "jose";
 
 /**
- * A bot's identity is a key it holds, and nothing else.
+ * A bot signs its own certificate; the server derives the identity from the
+ * key's thumbprint. Bots have their own issuer and subject namespace, so a bot
+ * can never hold an id a person could.
  *
- * A bot signs its own certificate with the key it holds, and the server derives
- * the identity from that key's thumbprint. There is no person to authenticate,
- * and asking a bot to hold an account's credentials would mean putting a
- * human's identity in a container's environment.
- *
- * Bots have their own certificate issuer and their own subject namespace, so a
- * bot can never hold an id a person could hold, and every surface that shows a
- * member can say which it is without looking anything up.
- *
- * One consequence worth knowing before you deploy one: **the key file is the
- * bot.** Lose it and the server sees a stranger asking to join, with none of
- * the permissions the one before it was given. Keep it, back it up, do not
- * commit it.
+ * **The key file is the bot.** Lose it and the server sees a stranger asking to
+ * join, with none of the permissions the one before it had.
  */
 
 /**
@@ -39,17 +30,8 @@ import {
  */
 const BOT_ISSUER = "gryt:bot";
 
-/**
- * The prefix the server puts on every bot identity.
- *
- * Written down here only so this SDK can show you the id your bot will have
- * before it has ever connected. The server derives it independently and ignores
- * anything the certificate claims.
- *
- * Loud and upper case for a reason: this string turns up in audit rows and
- * support conversations, and the question it has to answer instantly is whether
- * what did the thing was a person.
- */
+/** Here only so the SDK can show the id before connecting. The server derives
+ *  it independently and ignores whatever the certificate claims. */
 const BOT_SUB_PREFIX = "BOT_";
 
 export interface BotIdentity {
@@ -125,14 +107,10 @@ export async function createIdentity(): Promise<{
 }
 
 /**
- * Load a bot's identity from disk, minting one the first time.
+ * The second run must be the same bot: same id, same role, same history. A key
+ * generated per start arrives as a new member every time.
  *
- * The whole point is that the second run is the same bot as the first — same
- * id, same role, same history. A bot that generated a key on every start would
- * arrive as a new member each time, land on whatever the server gives
- * strangers, and leave a trail of abandoned memberships behind it.
- *
- * Written with `0o600`, because anyone who can read this file can be this bot.
+ * Written `0o600` — anyone who can read this file can be this bot.
  */
 export async function loadIdentity(path: string): Promise<BotIdentity> {
   try {

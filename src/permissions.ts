@@ -1,16 +1,10 @@
 import type { Permission } from "./types.ts";
 
 /**
- * What a Gryt server knew about before it published a catalogue of its own.
+ * Stands in for the catalogue on a server too old to publish one, so an absent
+ * permission is not read as a refusal.
  *
- * Servers send the caller's permissions and, since the release that added the
- * fuller set, a list of every permission that build has heard of. Without that
- * list an absence is ambiguous — it could be a refusal, or a permission the
- * server predates — and reading the second as a refusal means an SDK that knows
- * about `read_messages` refusing to read on every server not yet upgraded.
- *
- * So against a server too old to publish one, this stands in for it. Frozen: it
- * describes a release that has already happened, and it never grows.
+ * **Frozen.** It describes a release that has already happened, and never grows.
  */
 export const PERMISSIONS_BEFORE_CATALOGUE: readonly Permission[] = [
   "send_messages",

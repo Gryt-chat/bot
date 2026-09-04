@@ -33,16 +33,11 @@ export interface GrytBotOptions {
   /** An already-loaded identity, if you keep the key somewhere of your own. */
   identity?: BotIdentity;
   /**
-   * What this bot is asking to be allowed to do.
+   * Sent once, the first time it turns up, and shown to whoever approves it.
+   * Ask for the least that works.
    *
-   * Sent once, the first time it turns up at a server, and shown to whoever
-   * approves it. Ask for the least that makes the bot work: an operator looking
-   * at a long list is being asked to trust more than they can check, and the
-   * ones they untick are the ones you will find out about.
-   *
-   * **It is fixed from then on.** A later run declaring more gets the answer to
-   * the question the first one asked — which is the point, because the run
-   * asking for more may not be yours.
+   * **Fixed from then on.** A later run declaring more gets the answer to the
+   * question the first one asked — the run asking for more may not be yours.
    */
   wants?: string[];
   /** One line, shown beside the ask. Say what the bot is for. */
@@ -96,18 +91,12 @@ function toDate(value: unknown): Date {
 /**
  * A bot on one Gryt server.
  *
- * It joins the way any other client does — a self-signed certificate and a
- * challenge-response over P-256 — and from the server's point of view it is a
- * member like any other. That is the whole design: there is no bot account
- * type, no bot token, and no bot bypass. What a bot may do is what its role
- * says, enforced by the same checks that apply to a person, and the operator
- * hands it a role in the same editor.
+ * It joins like any other client and is a member like any other: no bot account
+ * type, no bot token, no bypass. What it may do is what its role says.
  *
- * Which means the interesting failure is a *permission* failure, and this class
- * is built around making that legible. `bot.can()` answers from what the server
- * said; sending without the permission throws here with the permission's name
- * rather than emitting into the void and getting a `server:error` back a moment
- * later with no clue which call caused it.
+ * So the interesting failure is a permission failure. `can()` answers from what
+ * the server said, and sending without the permission throws here with the
+ * permission's name rather than surfacing as a `server:error` later.
  *
  * ```ts
  * const bot = new GrytBot({ host: "localhost:5001", nickname: "Helper" });
@@ -175,17 +164,9 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   }
 
   /**
-   * Whether the bot holds a permission.
-   *
-   * False before `ready`, deliberately: a bot that acts on what it assumes it
-   * may do, before the server has said, is a bot that discovers it was wrong
-   * over the wire.
-   *
-   * True for a permission the server's own catalogue does not contain. That is
-   * a server older than the permission, and a server cannot be withholding
-   * something it has never heard of — reading the absence as a refusal would
-   * mean an SDK that knows about `read_messages` refusing to read on every
-   * server that has not been upgraded yet.
+   * False before `ready`: a bot acting on what it assumes it may do finds out
+   * over the wire. True for a permission the server's catalogue does not have —
+   * that is a server older than the permission, not a refusal.
    */
   can(permission: Permission): boolean {
     if (this.info === null) return false;
