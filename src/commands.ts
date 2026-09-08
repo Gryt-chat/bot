@@ -55,11 +55,8 @@ export function splitArgs(rest: string): string[] {
 }
 
 /**
- * The default `help`, listing what the bot can actually do here.
- *
- * Commands the bot lacks the permissions for are left out rather than shown as
- * unavailable. A listing that offers things that will not work is worse than a
- * shorter listing.
+ * The default `help`, listing what the bot can actually do here. Commands it lacks the
+ * permissions for are left out: a listing that offers what will not work is worse.
  */
 export function buildHelpText(
   commands: RegisteredCommand[],

@@ -11,22 +11,13 @@ import {
 } from "jose";
 
 /**
- * A bot signs its own certificate; the server derives the identity from the
- * key's thumbprint. Bots have their own issuer and subject namespace, so a bot
- * can never hold an id a person could.
- *
- * **The key file is the bot.** Lose it and the server sees a stranger asking to
- * join, with none of the permissions the one before it had.
+ * A bot signs its own certificate and the server derives the identity from the key's
+ * thumbprint. The key file is the bot: lose it and the server sees a stranger.
  */
 
 /**
- * The `iss` a bot's certificate carries.
- *
- * Cryptographically identical to a person's self-signed certificate — a key
- * signing for itself — and a separate issuer on purpose. The server dispatches
- * on it, and that is what puts a bot in its own subject namespace and its own
- * tier. A bot is admitted by the operator answering it, never by the server's
- * setting for anonymous people.
+ * The `iss` a bot's certificate carries. Cryptographically the same as a person's
+ * self-signed one; a separate issuer, because the server dispatches on it.
  */
 const BOT_ISSUER = "gryt:bot";
 
@@ -52,11 +43,8 @@ interface StoredIdentity {
 async function fromJwk(privateJwk: JWK): Promise<BotIdentity> {
   const privateKey = await importJWK(privateJwk, "ES256");
 
-  // The public half, which is what the certificate carries. Stripping the
-  // private fields is not optional: a certificate containing `d` would hand the
-  // server signing material for this bot's identity, and a well-behaved server
-  // refuses it — but the reason to not send it is that it should never leave
-  // this process at all.
+  // The public half, which is what the certificate carries. Stripping the private fields is
+  // not optional: `d` would hand the server signing material for this bot's identity.
   const publicJwk: JWK = {
     kty: privateJwk.kty,
     crv: privateJwk.crv,
@@ -74,9 +62,8 @@ async function fromJwk(privateJwk: JWK): Promise<BotIdentity> {
       new SignJWT({ jwk: publicJwk })
         .setProtectedHeader({ alg: "ES256" })
         .setIssuer(BOT_ISSUER)
-        // The server derives the subject from the key and ignores this. It is
-        // set to the derived value anyway, so a certificate read by a human
-        // says the same thing the server concluded.
+        // The server derives the subject from the key and ignores this. Set to the derived
+        // value anyway, so a certificate read by a human says what the server concluded.
         .setSubject(subject)
         .setIssuedAt()
         .setExpirationTime("1h")
@@ -107,10 +94,8 @@ export async function createIdentity(): Promise<{
 }
 
 /**
- * The second run must be the same bot: same id, same role, same history. A key
- * generated per start arrives as a new member every time.
- *
- * Written `0o600` — anyone who can read this file can be this bot.
+ * The second run must be the same bot: same id, same role, same history. Written `0o600` —
+ * anyone who can read this file can be this bot.
  */
 export async function loadIdentity(path: string): Promise<BotIdentity> {
   try {

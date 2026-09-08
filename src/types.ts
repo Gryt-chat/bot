@@ -1,10 +1,6 @@
 /**
- * The shapes a bot sees.
- *
- * Deliberately narrower than what the server sends. A bot that reaches for a
- * field this file does not name is reaching for something the server has never
- * promised to keep, and the socket is right there if you need it — see
- * `GrytBot.socket`.
+ * The shapes a bot sees, deliberately narrower than what the server sends. A field this file
+ * does not name is one the server never promised to keep — see `GrytBot.socket`.
  */
 
 /** A permission id. The server owns the list; see `GrytBot.permissions`. */
@@ -61,11 +57,8 @@ export interface ServerInfo {
 }
 
 /**
- * Why the server refused something.
- *
- * The machine-readable half is `error`, which is what the server actually
- * sends; `code` is accepted too because it is the name half of this SDK reached
- * for first and getting it wrong turned "waiting to be approved" into a crash.
+ * Why the server refused something. The machine-readable half is `error`; `code` is accepted
+ * too, because this SDK reached for that name first and the mistake read as a crash.
  */
 export interface ServerRefusal {
   error?: string;

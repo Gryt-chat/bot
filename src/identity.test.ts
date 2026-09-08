@@ -52,9 +52,8 @@ describe("a bot's identity", () => {
     const claims = decodeJwt(cert) as { jwk?: Record<string, unknown> };
 
     assert.ok(claims.jwk, "carries a key");
-    // A certificate containing `d` would hand the server signing material for
-    // this bot's identity. A well-behaved server refuses it; the reason not to
-    // send it is that it should never leave the process.
+    // A certificate containing `d` would hand the server signing material for this bot's
+    // identity. A well-behaved server refuses it; it should never leave the process.
     assert.equal("d" in claims.jwk, false);
     assert.equal(claims.jwk.kty, "EC");
     assert.equal(claims.jwk.crv, "P-256");
