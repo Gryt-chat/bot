@@ -20,13 +20,8 @@ export interface CommandOptions {
   /** One line, for the help listing. */
   description?: string;
   /**
-   * Permissions the *bot* needs before this command is worth offering.
-   *
-   * Checked before the handler runs, so a command that replies is skipped
-   * outright on a server where the bot may not post — rather than running,
-   * failing at the socket, and leaving whoever typed it watching nothing
-   * happen. This is about the bot, not about the person who typed it: what
-   * *they* may do is the server's business and it is already enforcing it.
+   * Permissions the bot needs before this command is worth offering, checked before the
+   * handler runs. About the bot, not the person: what they may do is the server's business.
    */
   requires?: Permission[];
 }
@@ -37,10 +32,8 @@ export interface RegisteredCommand extends CommandOptions {
 }
 
 /**
- * Which command a message invokes, if any.
- *
- * Case-insensitive on the command word, because somebody will type `!Help` and
- * being right about it helps nobody.
+ * Which command a message invokes, if any. Case-insensitive on the command word, because
+ * somebody will type `!Help` and being right about it helps nobody.
  */
 export function parseCommand(
   text: string,

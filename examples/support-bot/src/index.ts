@@ -1,20 +1,6 @@
 /**
- * A support bot, meant to be copied and changed.
- *
- * It answers questions out of `faq.json` and waves at people when they arrive.
- * That is deliberately not much — what it is really showing is the four things
- * every Gryt bot has to get right:
- *
- * 1. **Ask for the least that works.** `wants` below is three permissions, and
- *    an admin will see exactly those three when it knocks. A list they cannot
- *    check is a list they will untick.
- * 2. **Handle being told no.** An admin may approve you with fewer permissions
- *    than you asked for, or narrow you later. `bot.can()` is the answer to what
- *    you actually hold, and it can change while you are running.
- * 3. **Keep the key.** `gryt-bot-identity.json` is the bot. In a container that
- *    means a volume; without one, every restart is a stranger knocking again.
- * 4. **Do not answer yourself.** The SDK drops the bot's own messages before
- *    handlers see them, but a bot that replies to another bot will still loop.
+ * A support bot, meant to be copied and changed. The four things every Gryt bot gets right:
+ * ask for the least that works, handle being told no, keep the key, do not answer yourself.
  */
 import { readFileSync } from "node:fs";
 
@@ -82,15 +68,13 @@ bot.command(
 // ── Waving at people ────────────────────────────────────────────────
 
 bot.on("message", async (message) => {
-  // The server posts arrivals as a system message. Reacting rather than
-  // replying, because a channel where every arrival costs two lines is a
-  // channel people mute.
+  // The server posts arrivals as a system message. Reacting rather than replying, because a
+  // channel where every arrival costs two lines is a channel people mute.
   if (!message.isSystem) return;
   if (!/joined the server/i.test(message.text ?? "")) return;
 
   // Checked rather than assumed: an admin may have approved this bot without
-  // `add_reactions`, and finding that out from a red toast in somebody's
-  // client is worse than not waving.
+  // `add_reactions`, and finding that out from a red toast is worse than not waving.
   if (!bot.can("add_reactions")) return;
 
   await bot.react(message.conversationId, message.messageId, "👋");
@@ -117,11 +101,8 @@ bot.on("ready", (info) => {
 bot.on("error", (err) => console.error("[gryt]", err.message));
 bot.on("disconnected", (why) => console.warn("[gryt] disconnected:", why));
 
-// Not awaited: on a first run there is nobody to answer yet, and the bot should
-// sit at the door rather than exit. The catch is not optional — `start()`
-// rejects when the server refuses, and an unhandled rejection takes the process
-// down. Every refusal has already been reported through `error` above, so there
-// is nothing to do here but let it be handled.
+// Not awaited: on a first run there is nobody to answer yet, so the bot sits at the door.
+// The catch is not optional — `start()` rejects, and an unhandled rejection ends the process.
 bot.start().catch(() => {});
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

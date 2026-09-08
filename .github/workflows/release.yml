@@ -1,15 +1,7 @@
 name: Release
 
-# Changesets, the way @gryt/ui does it. A pull request that changes the package
-# carries a changeset saying what kind of change it is; this collects them into
-# a "Version Packages" pull request, and publishes when that is merged.
-#
-# It replaced a dispatched workflow lifted from @gryt/voice, where you picked
-# patch or minor from a dropdown at release time. That suits a package whose
-# consumer pins a version deliberately. It does not suit this one: the pull
-# request already knew whether it was a breaking change, and asking again days
-# later — from a dropdown, with the diff no longer in front of you — is asking
-# the same question in the worse place.
+# Changesets, the way @gryt/ui does it: a pull request carrying a changeset says what kind of
+# change it is, and merging the "Version Packages" PR publishes.
 
 on:
   push:
@@ -18,10 +10,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  # Required for npm trusted publishing. Without it the OIDC token is never
-  # minted and npm falls back to looking for a credential, so a publish that is
-  # meant to be tokenless fails as though the token were missing — which is a
-  # confusing way to find out.
+  # Required for npm trusted publishing. Without it no OIDC token is minted and npm falls
+  # back to looking for a credential, so a tokenless publish fails as unauthorised.
   id-token: write
 
 concurrency:
@@ -51,10 +41,8 @@ jobs:
       - run: yarn test
       - run: yarn build
 
-      # Before the publish rather than after it, because a version cannot be
-      # replaced once it is on npm. tsc being happy is not the same as Node
-      # being able to load the result — @gryt/voice learned that expensively in
-      # GRYT-344 — so this imports the real dist the way an installer would.
+      # Before the publish, because a version cannot be replaced once it is on npm. tsc being
+      # happy is not Node being able to load the result — see GRYT-344.
       - name: Check the built package actually loads
         run: |
           node -e "
@@ -69,20 +57,8 @@ jobs:
             }).catch((e) => { console.error(e); process.exit(1); });
           "
 
-      # The version-bump commit's message, and no `[skip ci]` in it.
-      #
-      # It reads like it only applies to the release pull request's own branch,
-      # where skipping CI is harmless. It does not: squash-merging that pull
-      # request puts this exact message on main, main is this workflow's only
-      # trigger, and so the merge that is supposed to publish does nothing at
-      # all. @gryt/bot 0.1.1 sat versioned on main and unpublished because of
-      # it, and nothing failed — there was simply no run.
-      #
-      # The marker counts anywhere in a commit message, body included, and a
-      # squash merge concatenates the branch's messages into that body. The
-      # commit that removed it from this line quoted it while explaining the
-      # bug, and suppressed its own release run the same way. Say "the skip
-      # marker" in anything that will end up on main.
+      # The version-bump commit's message, with no skip marker in it: squash-merging puts
+      # this message on main, and main is this workflow's only trigger (0.1.1 never shipped).
       - uses: changesets/action@v1
         with:
           publish: yarn release
