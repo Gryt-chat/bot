@@ -1,18 +1,6 @@
 /**
- * The smallest useful bot.
- *
- * Run it against a local dev server:
- *
- *   GRYT_HOST=localhost:5001 node --experimental-strip-types examples/ping.ts
- *
- * The first run knocks and waits: the bot turns up, says what it wants, and an
- * admin answers it in Server settings → Bots. Nothing to configure on the
- * server, no invite, no restart. Leave it running — the approval arrives
- * without a reconnect.
- *
- * The first run also writes `gryt-bot-identity.json`. That file is the bot:
- * keep it and the bot keeps its permissions, lose it and the server sees a
- * stranger asking to join again.
+ * The smallest useful bot. The first run knocks and waits for an admin, and writes
+ * `gryt-bot-identity.json` — that file is the bot; lose it and the server sees a stranger.
  */
 import { GrytBot } from "../src/index.ts";
 
@@ -59,11 +47,8 @@ bot.on("ready", (info) =>
   ),
 );
 
-// Not awaited: on a first run there is nobody to answer yet, and the bot should
-// sit at the door rather than exit. The catch is not optional — `start()`
-// rejects when the server refuses, and an unhandled rejection takes the process
-// down. Every refusal has already been reported through `error` above, so there
-// is nothing to do here but let it be handled.
+// Not awaited: on a first run there is nobody to answer yet, so the bot sits at the door.
+// The catch is not optional — `start()` rejects, and an unhandled rejection ends the process.
 bot.start().catch(() => {});
 
 process.on("SIGINT", () => {

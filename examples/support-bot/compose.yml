@@ -1,8 +1,5 @@
-# The whole deployment. Two things matter here.
-#
-#   docker compose up -d && docker compose logs -f
-#
-# GRYT_HOST is where your server is. Everything else has a sensible default.
+# The whole deployment: `docker compose up -d && docker compose logs -f`. GRYT_HOST is where
+# your server is, and everything else has a sensible default.
 services:
   support-bot:
     build: .
@@ -15,9 +12,8 @@ services:
       # the bot knocks instead, which is the normal way in.
       GRYT_BOT_TOKEN: ${GRYT_BOT_TOKEN:-}
     volumes:
-      # The one thing you must not lose. This file *is* the bot: keep it and the
-      # bot keeps its permissions across restarts and upgrades; lose it and the
-      # server sees a stranger asking to join, with nothing granted.
+      # The one thing you must not lose. This file is the bot: keep it and the bot keeps its
+      # permissions across restarts; lose it and the server sees a stranger knocking.
       - support-bot-identity:/data
 
 volumes:

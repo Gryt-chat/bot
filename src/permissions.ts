@@ -1,10 +1,8 @@
 import type { Permission } from "./types.ts";
 
 /**
- * Stands in for the catalogue on a server too old to publish one, so an absent
- * permission is not read as a refusal.
- *
- * **Frozen.** It describes a release that has already happened, and never grows.
+ * Stands in for the catalogue on a server too old to publish one, so an absent permission is
+ * not read as a refusal. Frozen: it describes a release that has already happened.
  */
 export const PERMISSIONS_BEFORE_CATALOGUE: readonly Permission[] = [
   "send_messages",

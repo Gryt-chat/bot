@@ -33,21 +33,15 @@ export interface GrytBotOptions {
   /** An already-loaded identity, if you keep the key somewhere of your own. */
   identity?: BotIdentity;
   /**
-   * Sent once, the first time it turns up, and shown to whoever approves it.
-   * Ask for the least that works.
-   *
-   * **Fixed from then on.** A later run declaring more gets the answer to the
-   * question the first one asked — the run asking for more may not be yours.
+   * Sent once, the first time it turns up, and shown to whoever approves it. Fixed from then
+   * on: a later run declaring more gets the answer to the question the first one asked.
    */
   wants?: string[];
   /** One line, shown beside the ask. Say what the bot is for. */
   description?: string;
   /**
-   * A token from a registration an operator set up in advance.
-   *
-   * The unattended path: no approval to wait for, because the approving already
-   * happened. Single-use — the first bot to present it becomes that
-   * registration.
+   * A token from a registration an operator set up in advance: no approval to wait for.
+   * Single-use — the first bot to present it becomes that registration.
    */
   botToken?: string;
   /** The command prefix. Set to "" to turn the router off entirely. */
@@ -89,25 +83,8 @@ function toDate(value: unknown): Date {
 }
 
 /**
- * A bot on one Gryt server.
- *
- * It joins like any other client and is a member like any other: no bot account
- * type, no bot token, no bypass. What it may do is what its role says.
- *
- * So the interesting failure is a permission failure. `can()` answers from what
- * the server said, and sending without the permission throws here with the
- * permission's name rather than surfacing as a `server:error` later.
- *
- * ```ts
- * const bot = new GrytBot({ host: "localhost:5001", nickname: "Helper" });
- *
- * bot.command("ping", async (ctx) => ctx.reply("pong"), {
- *   description: "Check I am alive",
- *   requires: ["send_messages"],
- * });
- *
- * await bot.start();
- * ```
+ * A bot on one Gryt server. It joins like any other client and is a member like any other:
+ * no bot account type and no bypass, so what it may do is what its role says.
  */
 export class GrytBot extends EventEmitter<GrytBotEvents> {
   readonly host: string;
@@ -164,9 +141,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   }
 
   /**
-   * False before `ready`: a bot acting on what it assumes it may do finds out
-   * over the wire. True for a permission the server's catalogue does not have —
-   * that is a server older than the permission, not a refusal.
+   * False before `ready`. True for a permission the server's catalogue does not have — that
+   * is a server older than the permission, not a refusal.
    */
   can(permission: Permission): boolean {
     if (this.info === null) return false;
@@ -186,11 +162,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   // ── Lifecycle ─────────────────────────────────────────────────────
 
   /**
-   * Connect, join, and resolve once the server has said who this bot is.
-   *
-   * On a first run against a server that has not approved it, this does not
-   * resolve — the bot is waiting at the door, which is a state and not a
-   * failure. Listen for `waiting`, and for `ready` when somebody answers.
+   * Connect, join, and resolve once the server has said who this bot is. On a first run it
+   * does not resolve: the bot is waiting at the door. Listen for `waiting`, then `ready`.
    */
   async start(): Promise<ServerInfo> {
     this.identity =
@@ -239,11 +212,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   // ── Actions ───────────────────────────────────────────────────────
 
   /**
-   * Post in a channel.
-   *
-   * Throws before sending anything if the bot lacks `send_messages`, naming
-   * the permission. The server would refuse it anyway; failing here means the
-   * stack trace points at the call rather than at a socket handler.
+   * Post in a channel. Throws before sending if the bot lacks `send_messages`, naming the
+   * permission, so the stack trace points at the call rather than a socket handler.
    */
   async send(conversationId: string, text: string): Promise<void> {
     this.require("send_messages");
@@ -256,11 +226,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   }
 
   /**
-   * Delete a message.
-   *
-   * Its own is `delete_own_messages`; anybody else's is `manage_messages`. The
-   * caller says which it is, because the bot does not necessarily know who sent
-   * a message it was handed.
+   * Delete a message. Its own is `delete_own_messages`; anybody else's is `manage_messages`,
+   * and the caller says which, because the bot may not know who sent it.
    */
   async delete(
     conversationId: string,
@@ -342,10 +309,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     socket.on("server:error", (payload: ServerRefusal | string) => {
       const code = typeof payload === "string" ? "" : payload?.error ?? payload?.code;
 
-      // Waiting to be let in is the ordinary first run, not a failure. A bot
-      // that crashed here would restart, knock again, and fill the operator's
-      // screen with the same request — so it says so once and keeps the socket,
-      // and the approval arrives as a `server:details` without a reconnect.
+      // Waiting to be let in is the ordinary first run, not a failure: a bot that crashed
+      // here would knock again on restart. The approval arrives without a reconnect.
       if (code === "bot_not_approved") {
         if (!this.announcedWait) {
           this.announcedWait = true;
@@ -393,11 +358,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     const identity = this.identity;
     if (!identity) return;
 
-    // Nothing to check here any more. Bots are admitted by an operator
-    // answering them, not by the server's setting for anonymous people — which
-    // is the whole reason they were given a tier of their own. Adding a bot no
-    // longer means opening the door to every stranger, and no longer needs a
-    // server restart.
+    // Nothing to check here any more. Bots are admitted by an operator answering them, not
+    // by the server's setting for anonymous people — which is why they have their own tier.
 
     try {
       const [certificate, assertion] = await Promise.all([
@@ -452,9 +414,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
 
     if (Array.isArray(d.channels)) this.emit("channels", d.channels);
 
-    // `server:details` is re-sent whenever anybody's role changes, so this is
-    // also how a bot learns it has been promoted or demoted mid-run. Only the
-    // first one is `ready`.
+    // `server:details` is re-sent whenever anybody's role changes, so this is also how a bot
+    // learns it has been promoted mid-run. Only the first one is `ready`.
     if (!wasReady) this.emit("ready", this.info);
   }
 
@@ -497,9 +458,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     const command = this.commands.get(parsed.name);
     if (!command) return;
 
-    // Skipped rather than attempted. A command that needs `send_messages` on a
-    // server where the bot may not post would otherwise run, fail at the
-    // socket, and leave whoever typed it watching nothing happen.
+    // Skipped rather than attempted. A command that needs `send_messages` where the bot may
+    // not post would otherwise run, fail at the socket, and look like nothing happened.
     const missing = (command.requires ?? []).filter((p) => !this.can(p));
     if (missing.length > 0) {
       this.emit(
@@ -529,14 +489,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   }
 
   /**
-   * Read this bot's own id out of the token it was just handed.
-   *
-   * Not verified, and it does not need to be: the server issued this token to
-   * this socket a moment ago, and the only thing read out of it is used to
-   * decide whether a message is the bot's own. Nothing is authorised on it —
-   * the server is doing that, against the same token.
-   *
-   * The id is not in `server:joined` itself, which is why it comes from here.
+   * Read this bot's own id out of the token it was just handed. Not verified and it does not
+   * need to be: nothing is authorised on it, and the id is not in `server:joined`.
    */
   private rememberSelf(accessToken: string): void {
     try {

@@ -28,6 +28,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"src/**/*.test.ts\"",
+    "test:comment-length": "node scripts/check-comment-length.mjs",
     "lint": "eslint src examples",
     "example:ping": "node --experimental-strip-types examples/ping.ts",
     "changeset": "changeset",
