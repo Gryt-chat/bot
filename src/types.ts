@@ -26,6 +26,8 @@ export interface Message {
   createdAt: Date;
   editedAt: Date | null;
   replyToMessageId: string | null;
+  /** Set for a reply inside a thread. */
+  threadId: string | null;
   /** True for the "X joined the server" kind of message, which has no sender. */
   isSystem: boolean;
   /** True when this bot sent it. Handlers are not called for these. */
@@ -38,6 +40,26 @@ export interface Member {
   role: string;
   status: "online" | "in_voice" | "afk" | "offline";
   avatarFileId: string | null;
+}
+
+export interface ThreadSummary {
+  threadId: string;
+  conversationId: string;
+  rootMessageId: string;
+  title: string | null;
+  replyCount: number;
+  status: string;
+  lastMessageAt: Date;
+}
+
+export interface SearchHit {
+  conversationId: string;
+  messageId: string;
+  threadId: string | null;
+  senderServerUserId: string;
+  senderNickname: string | null;
+  createdAt: Date;
+  snippet: string;
 }
 
 export interface Channel {

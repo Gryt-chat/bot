@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 
 import { decodeJwt } from "jose";
@@ -20,7 +21,9 @@ import type {
   Member,
   Message,
   Permission,
+  SearchHit,
   ServerInfo,
+  ThreadSummary,
 } from "./types.ts";
 
 export interface GrytBotOptions {
@@ -67,6 +70,8 @@ export interface GrytBotEvents {
 const DEFAULT_PREFIX = "!";
 const DEFAULT_IDENTITY_PATH = "./gryt-bot-identity.json";
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 /** Refresh a little before the 15-minute access token actually expires. */
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 
@@ -75,6 +80,28 @@ function httpBase(host: string, secure?: boolean): string {
   const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(host);
   const scheme = secure ?? !isLocal ? "https" : "http";
   return `${scheme}://${host.replace(/\/+$/, "")}`;
+}
+
+function toThread(raw: unknown): ThreadSummary | null {
+  const t = raw as {
+    thread_id?: string;
+    conversation_id?: string;
+    root_message_id?: string;
+    title?: string | null;
+    reply_count?: number;
+    status?: string;
+    last_message_at?: string;
+  };
+  if (!t?.thread_id || !t.root_message_id) return null;
+  return {
+    threadId: t.thread_id,
+    conversationId: t.conversation_id ?? "",
+    rootMessageId: t.root_message_id,
+    title: t.title ?? null,
+    replyCount: t.reply_count ?? 0,
+    status: t.status ?? "open",
+    lastMessageAt: toDate(t.last_message_at),
+  };
 }
 
 function toDate(value: unknown): Date {
@@ -103,6 +130,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   private serverKnows = new Set<Permission>(PERMISSIONS_BEFORE_CATALOGUE);
   private serverUserId: string | null = null;
   private stopped = false;
+  private memberList: Member[] = [];
+  private channelList: Channel[] = [];
   private announcedWait = false;
 
   constructor(options: GrytBotOptions) {
@@ -133,6 +162,16 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   /** What the server says this bot may do here. Empty until `ready`. */
   get permissions(): Permission[] {
     return [...this.permissionSet];
+  }
+
+  /** The last member list the server sent. Empty until it has. */
+  get members(): Member[] {
+    return this.memberList;
+  }
+
+  /** The channels this bot can see. Empty until `ready`. */
+  get channels(): Channel[] {
+    return this.channelList;
   }
 
   /** The server's own view of this bot. Null until `ready`. */
@@ -215,9 +254,26 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
    * Post in a channel. Throws before sending if the bot lacks `send_messages`, naming the
    * permission, so the stack trace points at the call rather than a socket handler.
    */
-  async send(conversationId: string, text: string): Promise<void> {
+  async send(
+    conversationId: string,
+    text: string,
+    opts: { replyTo?: string; threadId?: string } = {},
+  ): Promise<Message> {
     this.require("send_messages");
-    this.emitAuthed("chat:send", { conversationId, text });
+    const nonce = randomUUID();
+    return this.request(
+      () =>
+        this.emitAuthed("chat:send", {
+          conversationId,
+          text,
+          nonce,
+          ...(opts.replyTo ? { replyToMessageId: opts.replyTo } : {}),
+          ...(opts.threadId ? { threadId: opts.threadId } : {}),
+        }),
+      "chat:new",
+      (raw: { nonce?: string }) => (raw?.nonce === nonce ? this.toMessage(raw) : undefined),
+      ["chat:error", "thread:error"],
+    );
   }
 
   async react(conversationId: string, messageId: string, reactionSrc: string): Promise<void> {
@@ -238,6 +294,118 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     this.emitAuthed("chat:delete", { conversationId, messageId });
   }
 
+  /** A page of a channel, oldest first. `before` is a message's ISO timestamp. */
+  async history(
+    conversationId: string,
+    opts: { limit?: number; before?: string } = {},
+  ): Promise<{ messages: Message[]; threads: ThreadSummary[]; hasMore: boolean }> {
+    this.require("read_messages");
+    return this.request(
+      () => this.connection?.emit("chat:fetch", { conversationId, limit: opts.limit ?? 50, before: opts.before }),
+      "chat:history",
+      (raw: { conversation_id?: string; before?: string; items?: unknown[]; threads?: unknown[]; hasMore?: boolean }) => {
+        if (raw?.conversation_id !== conversationId || raw.before !== opts.before) return undefined;
+        return {
+          messages: this.toMessages(raw.items),
+          threads: (raw.threads ?? []).map(toThread).filter((t): t is ThreadSummary => t !== null),
+          hasMore: raw.hasMore === true,
+        };
+      },
+      ["chat:error"],
+    );
+  }
+
+  /** A thread's root and replies, oldest first. */
+  async thread(
+    conversationId: string,
+    threadId: string,
+    opts: { limit?: number; before?: string } = {},
+  ): Promise<{ thread: ThreadSummary | null; root: Message | null; replies: Message[]; hasMore: boolean }> {
+    this.require("read_messages");
+    return this.request(
+      () => this.connection?.emit("thread:fetch", { conversationId, threadId, limit: opts.limit ?? 50, before: opts.before }),
+      "thread:history",
+      (raw: { thread?: unknown; root?: unknown; items?: unknown[]; hasMore?: boolean; before?: string }) => {
+        const thread = toThread(raw?.thread);
+        if (thread?.threadId !== threadId || raw.before !== opts.before) return undefined;
+        return {
+          thread,
+          root: raw.root ? this.toMessage(raw.root) : null,
+          replies: this.toMessages(raw.items),
+          hasMore: raw.hasMore === true,
+        };
+      },
+      ["thread:error"],
+    );
+  }
+
+  /** Text channels this bot can read. Something has to narrow it, or the server returns nothing. */
+  async search(opts: {
+    query?: string;
+    conversationId?: string;
+    senderServerUserId?: string;
+    before?: string;
+    after?: string;
+    limit?: number;
+  }): Promise<{ hits: SearchHit[]; total: number }> {
+    this.require("read_messages");
+    const requestId = randomUUID();
+    return this.request(
+      () =>
+        this.connection?.emit("chat:search", {
+          requestId,
+          query: opts.query,
+          conversationId: opts.conversationId,
+          senderServerId: opts.senderServerUserId,
+          before: opts.before,
+          after: opts.after,
+          limit: opts.limit,
+        }),
+      "chat:search:results",
+      (raw: { requestId?: string; items?: Record<string, unknown>[]; total?: number; error?: string }) => {
+        if (raw?.requestId !== requestId) return undefined;
+        if (raw.error) throw new Error(`Search refused: ${raw.error}`);
+        return {
+          hits: (raw.items ?? []).map((h) => ({
+            conversationId: String(h.conversation_id),
+            messageId: String(h.message_id),
+            threadId: (h.thread_id as string | null) ?? null,
+            senderServerUserId: String(h.sender_server_id),
+            senderNickname: (h.sender_display_name as string | null) ?? null,
+            createdAt: toDate(h.created_at),
+            snippet: String(h.snippet ?? ""),
+          })),
+          total: raw.total ?? 0,
+        };
+      },
+    );
+  }
+
+  /** Start a thread on a message. Starting one that exists returns that one. */
+  async startThread(conversationId: string, rootMessageId: string, title?: string): Promise<ThreadSummary> {
+    this.require("send_messages");
+    return this.request(
+      () => this.emitAuthed("thread:create", { conversationId, rootMessageId, title }),
+      "thread:created",
+      (raw: unknown) => {
+        const t = toThread(raw);
+        return t?.rootMessageId === rootMessageId ? t : undefined;
+      },
+      ["thread:error"],
+    );
+  }
+
+  /** Voice rooms, latency and SFU numbers. Needs `view_diagnostics`, which owners hold. */
+  async diagnostics(): Promise<Record<string, unknown>> {
+    this.require("view_diagnostics");
+    return this.request(
+      () => this.emitAuthed("server:diagnostics", {}),
+      "server:diagnostics",
+      (raw: Record<string, unknown>) => raw,
+      ["server:error"],
+    );
+  }
+
   /** Ask for the last N messages in a channel. Answered on the `message` event. */
   async fetch(conversationId: string, limit = 50): Promise<void> {
     this.require("read_messages");
@@ -253,6 +421,54 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
         `Give its role that permission in the server's role editor. ` +
         `It currently holds: ${this.permissions.join(", ") || "nothing"}.`,
     );
+  }
+
+  /**
+   * Emit, then resolve with the first `reply` that `pick` turns into a value. Any of `errors`
+   * rejects it: the server mostly does not say which call a refusal answers.
+   */
+  private request<T, R = never>(
+    emit: () => void,
+    reply: string,
+    pick: (raw: R) => T | undefined | null,
+    errors: string[] = [],
+  ): Promise<T> {
+    const socket = this.connection;
+    if (!socket) return Promise.reject(new Error(`Not joined to ${this.host} yet — await bot.start() first.`));
+    return new Promise<T>((resolve, reject) => {
+      const done = () => {
+        clearTimeout(timer);
+        socket.off(reply, onReply);
+        for (const e of errors) socket.off(e, onError);
+      };
+      const onReply = (raw: R) => {
+        try {
+          const value = pick(raw);
+          if (value === undefined || value === null) return;
+          done();
+          resolve(value);
+        } catch (err) {
+          done();
+          reject(err);
+        }
+      };
+      const onError = (payload: ServerRefusal | string) => {
+        done();
+        reject(this.toError(payload));
+      };
+      const timer = setTimeout(() => {
+        done();
+        reject(new Error(`${this.host} did not answer ${reply} within ${REQUEST_TIMEOUT_MS / 1000}s.`));
+      }, REQUEST_TIMEOUT_MS);
+      socket.on(reply, onReply);
+      for (const e of errors) socket.on(e, onError);
+      try {
+        emit();
+      } catch (err) {
+        done();
+        reject(err);
+      }
+    });
   }
 
   private emitAuthed(event: string, payload: Record<string, unknown>): void {
@@ -293,7 +509,9 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     });
 
     socket.on("members:list", (members: unknown) => {
-      if (Array.isArray(members)) this.emit("members", members as Member[]);
+      if (!Array.isArray(members)) return;
+      this.memberList = members as Member[];
+      this.emit("members", this.memberList);
     });
 
     socket.on("chat:new", (raw: unknown) => {
@@ -412,7 +630,10 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
       role: d.server_info.role ?? "",
     };
 
-    if (Array.isArray(d.channels)) this.emit("channels", d.channels);
+    if (Array.isArray(d.channels)) {
+      this.channelList = d.channels;
+      this.emit("channels", d.channels);
+    }
 
     // `server:details` is re-sent whenever anybody's role changes, so this is also how a bot
     // learns it has been promoted mid-run. Only the first one is `ready`.
@@ -429,6 +650,7 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
       created_at?: string;
       edited_at?: string | null;
       reply_to_message_id?: string | null;
+      thread_id?: string | null;
       enriched_attachments?: Attachment[];
     };
     if (!m?.conversation_id || !m?.message_id) return null;
@@ -444,9 +666,14 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
       createdAt: toDate(m.created_at),
       editedAt: m.edited_at ? toDate(m.edited_at) : null,
       replyToMessageId: m.reply_to_message_id ?? null,
+      threadId: m.thread_id ?? null,
       isSystem: sender === "system",
       isOwn: sender !== "" && sender === this.serverUserId,
     };
+  }
+
+  private toMessages(items: unknown[] | undefined): Message[] {
+    return (items ?? []).map((m) => this.toMessage(m)).filter((m): m is Message => m !== null);
   }
 
   private async runCommands(message: Message): Promise<void> {
@@ -475,7 +702,9 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
       message,
       rest: parsed.rest,
       args: splitArgs(parsed.rest),
-      reply: (text: string) => this.send(message.conversationId, text),
+      reply: async (text: string) => {
+        await this.send(message.conversationId, text);
+      },
       react: (emoji: string) => this.react(message.conversationId, message.messageId, emoji),
     };
 
