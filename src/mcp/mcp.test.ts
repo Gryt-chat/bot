@@ -27,19 +27,24 @@ function message(over: Partial<Message> = {}): Message {
 
 function setup(state: Connection["state"] = "ready") {
   const sent: unknown[] = [];
+  const typed: unknown[] = [];
+  const stopped: unknown[] = [];
+  const used: string[] = [];
   const bot = {
     channels: [{ id: "c1", name: "general", type: "text" }],
     members: [],
     permissions: ["read_messages"],
     serverInfo: { serverId: "s", name: "S", description: "", permissions: [], role: "bot" },
     history: async () => ({ messages: [message()], threads: [], hasMore: false }),
+    typing: (...args: unknown[]) => typed.push(args),
+    stopTyping: (...args: unknown[]) => stopped.push(args),
     send: async (...args: unknown[]) => {
       sent.push(args);
       return message({ messageId: "m2", isOwn: true });
     },
   } as unknown as BotLike;
-  const connections = new Map<string, Connection>([["pingy", { name: "pingy", host: "localhost:5001", bot, state }]]);
-  return { tools: makeTools(connections), sent };
+  const connections = new Map<string, Connection>([["pingy", { name: "pingy", host: "localhost:5001", bot, state, onUse: (d: string) => used.push(d) }]]);
+  return { tools: makeTools(connections), sent, typed, stopped, used };
 }
 
 const call = (tools: ReturnType<typeof makeTools>, name: string, args: object) =>
@@ -85,6 +90,15 @@ describe("the tools", () => {
     const out = await call(tools, "send_message", { channel: "general", text: "on it", thread_id: "t1" });
     assert.equal(out.result.content[0].text, "Posted in #general [m2].");
     assert.deepEqual(sent, [["c1", "on it", { replyTo: undefined, threadId: "t1" }]]);
+  });
+
+  it("shows typing at once, says what it is doing, and stops typing when it posts there", async () => {
+    const { tools, typed, stopped, used } = setup();
+    await call(tools, "show_typing", { channel: "general", thread_id: "t1" });
+    assert.deepEqual(typed, [["c1", "t1"]]);
+    assert.deepEqual(used, ["Reading #general"]);
+    await call(tools, "send_message", { channel: "general", text: "done", thread_id: "t1" });
+    assert.deepEqual(stopped, [["c1", "t1"]]);
   });
 
   it("tells the model what to do when the bot is still waiting at the door", async () => {

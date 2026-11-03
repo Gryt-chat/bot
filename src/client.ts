@@ -406,6 +406,41 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     );
   }
 
+  /** Shows "typing…" in a channel, or in a thread's composer, for about 8 seconds. Call again to keep it up. */
+  typing(conversationId: string, threadId?: string): void {
+    this.require("send_messages");
+    this.connection?.emit("chat:typing", { conversationId, threadId: threadId ?? null });
+  }
+
+  /** Takes "typing…" down now rather than when the server's 8 seconds run out. */
+  stopTyping(conversationId: string, threadId?: string): void {
+    this.connection?.emit("chat:stop_typing", { conversationId, threadId: threadId ?? null });
+  }
+
+  /** The line under the bot's name in the member list. Null clears it. */
+  setActivity(text: string | null): void {
+    if (text !== null) this.require("set_activity");
+    this.connection?.emit("presence:activity", { activity: text ?? "" });
+  }
+
+  /** Upload a picture as this bot's avatar, the way a person sets theirs. Resolves with its file id. */
+  async setAvatar(image: Uint8Array, filename: string, mime: string): Promise<string> {
+    this.require("upload_avatar_image");
+    if (!this.accessToken) throw new Error(`Not joined to ${this.host} yet — await bot.start() first.`);
+    const form = new FormData();
+    form.append("file", new Blob([image], { type: mime }), filename);
+    const res = await fetch(`${httpBase(this.host, this.options.secure)}/api/uploads/avatar`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+      body: form,
+    });
+    const body = (await res.json().catch(() => ({}))) as { avatarFileId?: string; message?: string; error?: string };
+    if (!res.ok || !body.avatarFileId) {
+      throw new Error(body.message ?? body.error ?? `${this.host} refused the avatar (${res.status}).`);
+    }
+    return body.avatarFileId;
+  }
+
   /** Ask for the last N messages in a channel. Answered on the `message` event. */
   async fetch(conversationId: string, limit = 50): Promise<void> {
     this.require("read_messages");
