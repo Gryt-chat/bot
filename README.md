@@ -92,6 +92,19 @@ restarts. Lose it and the server sees a stranger knocking, holding nothing.
 In a container that means a volume. The example's compose file has one, and says
 why in the place where leaving it out would be easy.
 
+## Let an AI read your server
+
+The package also ships `gryt-mcp`, an MCP server. Add it to Claude Code or
+another MCP client, and your AI can read channels, threads, search and voice
+diagnostics on your servers, and post when you approve it:
+
+```sh
+claude mcp add gryt -- npx -y -p @gryt/bot gryt-mcp --server home=chat.example.com
+```
+
+It knocks like any bot. Setup and what it asks for are on
+[docs.gryt.chat/docs/build/mcp](https://docs.gryt.chat/docs/build/mcp).
+
 ## Issues
 
 Please report bugs and request features in the
