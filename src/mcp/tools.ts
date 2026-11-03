@@ -16,6 +16,7 @@ export type BotLike = Pick<
   | "delete"
   | "diagnostics"
   | "typing"
+  | "stopTyping"
 >;
 
 export interface Connection {
@@ -59,9 +60,12 @@ export function formatMessage(m: Message): string {
 }
 
 export function makeTools(connections: Map<string, Connection>): Tool[] {
-  const typingTimers = new Map<string, NodeJS.Timeout>();
+  const typingTimers = new Map<string, { timer: NodeJS.Timeout; stop: () => void }>();
   const stopTyping = (key: string) => {
-    clearInterval(typingTimers.get(key));
+    const t = typingTimers.get(key);
+    if (!t) return;
+    clearInterval(t.timer);
+    t.stop();
     typingTimers.delete(key);
   };
   const conn = (args: Record<string, unknown>): Connection => {
@@ -258,7 +262,7 @@ export function makeTools(connections: Map<string, Connection>): Tool[] {
           c.bot.typing(ch.id, threadId);
         }, TYPING_REPEAT_MS);
         timer.unref?.();
-        typingTimers.set(key, timer);
+        typingTimers.set(key, { timer, stop: () => c.bot.stopTyping(ch.id, threadId) });
         return `Typing in #${ch.name}${threadId ? " (thread)" : ""}.`;
       },
     },

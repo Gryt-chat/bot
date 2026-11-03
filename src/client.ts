@@ -412,6 +412,11 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     this.connection?.emit("chat:typing", { conversationId, threadId: threadId ?? null });
   }
 
+  /** Takes "typing…" down now rather than when the server's 8 seconds run out. */
+  stopTyping(conversationId: string, threadId?: string): void {
+    this.connection?.emit("chat:stop_typing", { conversationId, threadId: threadId ?? null });
+  }
+
   /** The line under the bot's name in the member list. Null clears it. */
   setActivity(text: string | null): void {
     if (text !== null) this.require("set_activity");

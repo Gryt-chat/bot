@@ -28,6 +28,7 @@ function message(over: Partial<Message> = {}): Message {
 function setup(state: Connection["state"] = "ready") {
   const sent: unknown[] = [];
   const typed: unknown[] = [];
+  const stopped: unknown[] = [];
   const used: string[] = [];
   const bot = {
     channels: [{ id: "c1", name: "general", type: "text" }],
@@ -36,13 +37,14 @@ function setup(state: Connection["state"] = "ready") {
     serverInfo: { serverId: "s", name: "S", description: "", permissions: [], role: "bot" },
     history: async () => ({ messages: [message()], threads: [], hasMore: false }),
     typing: (...args: unknown[]) => typed.push(args),
+    stopTyping: (...args: unknown[]) => stopped.push(args),
     send: async (...args: unknown[]) => {
       sent.push(args);
       return message({ messageId: "m2", isOwn: true });
     },
   } as unknown as BotLike;
   const connections = new Map<string, Connection>([["pingy", { name: "pingy", host: "localhost:5001", bot, state, onUse: (d: string) => used.push(d) }]]);
-  return { tools: makeTools(connections), sent, typed, used };
+  return { tools: makeTools(connections), sent, typed, stopped, used };
 }
 
 const call = (tools: ReturnType<typeof makeTools>, name: string, args: object) =>
@@ -91,11 +93,12 @@ describe("the tools", () => {
   });
 
   it("shows typing at once, says what it is doing, and stops typing when it posts there", async () => {
-    const { tools, typed, used } = setup();
+    const { tools, typed, stopped, used } = setup();
     await call(tools, "show_typing", { channel: "general", thread_id: "t1" });
     assert.deepEqual(typed, [["c1", "t1"]]);
     assert.deepEqual(used, ["Reading #general"]);
     await call(tools, "send_message", { channel: "general", text: "done", thread_id: "t1" });
+    assert.deepEqual(stopped, [["c1", "t1"]]);
   });
 
   it("tells the model what to do when the bot is still waiting at the door", async () => {
