@@ -154,6 +154,7 @@ export function makeTools(connections: Map<string, Connection>): Tool[] {
         const c = conn(args);
         const ref = str(args, "channel", false);
         const names = new Map(c.bot.channels.map((ch) => [ch.id, ch.name]));
+        const nicks = new Map(c.bot.members.map((m) => [m.serverUserId, m.nickname]));
         const { hits, total } = await c.bot.search({
           query: str(args, "query", false),
           conversationId: ref ? channelOf(c, ref).id : undefined,
@@ -167,7 +168,7 @@ export function makeTools(connections: Map<string, Connection>): Tool[] {
           `${total} match(es)`,
           ...hits.map(
             (h) =>
-              `${h.createdAt.toISOString().slice(0, 16).replace("T", " ")} #${names.get(h.conversationId) ?? h.conversationId} ${h.senderNickname ?? h.senderServerUserId} [${h.messageId}]${h.threadId ? ` (thread ${h.threadId})` : ""}: ${h.snippet}`,
+              `${h.createdAt.toISOString().slice(0, 16).replace("T", " ")} #${names.get(h.conversationId) ?? h.conversationId} ${h.senderNickname ?? nicks.get(h.senderServerUserId) ?? h.senderServerUserId} [${h.messageId}]${h.threadId ? ` (thread ${h.threadId})` : ""}: ${h.snippet}`,
           ),
         ].join("\n");
       },
