@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { GrytBot } from "../client.ts";
 import { loadIdentity } from "../identity.ts";
@@ -27,7 +28,8 @@ function parseArgs(argv: string[]) {
   const servers = new Map<string, string>();
   let identityPath = join(homedir(), ".config", "gryt-mcp", "identity.json");
   let nickname = "Gryt";
-  let avatar: string | undefined;
+  // RoboGryt unless told otherwise; "none" leaves the owl the server draws.
+  let avatar: string | undefined = fileURLToPath(new URL("../../assets/robogryt.png", import.meta.url));
   const fromEnv = (process.env.GRYT_MCP_SERVERS ?? "").split(",").filter(Boolean);
   const pairs: string[] = [...fromEnv];
   for (let i = 0; i < argv.length - 1; i += 2) {
@@ -35,7 +37,7 @@ function parseArgs(argv: string[]) {
     if (flag === "--server") pairs.push(value);
     else if (flag === "--identity") identityPath = value;
     else if (flag === "--nickname") nickname = value;
-    else if (flag === "--avatar") avatar = value;
+    else if (flag === "--avatar") avatar = value === "none" ? undefined : value;
   }
   for (const pair of pairs) {
     const eq = pair.indexOf("=");
