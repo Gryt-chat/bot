@@ -1,5 +1,11 @@
 # @gryt/bot
 
+## 0.3.1
+
+### Patch Changes
+
+- 901d4ab: `gryt-mcp` uses RoboGryt, the owl robot, as its avatar unless you pass `--avatar <file>`, or `--avatar none` to keep the server's default.
+
 ## 0.3.0
 
 ### Minor Changes
