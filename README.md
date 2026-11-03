@@ -58,17 +58,17 @@ Nothing to configure on the server, no invite, and no restart. For a compose
 file or CI, where nobody is watching the first launch, an admin can write the
 registration in advance and hand over a single-use token instead.
 
-## What a bot asks for is fixed
+## Asking for more is a question, not a grant
 
-The first declaration is the only one. A later run asking for more gets the
-answer to the question the first one asked, and the server won't record the
-new list at all — a bot can't change its own name after approval either.
+A bot that's already in can declare more than it first asked for. It keeps
+working with what it has, and the new ones wait in **Server settings → Bots**
+as "wants new permissions", with what it already holds shown ticked. An admin
+approves some, all or none. Anything turned down isn't asked again, and a bot
+can't change its own name after approval.
 
-That isn't about the person writing the bot. It's about the run that is *not*
-theirs, after a published image has been taken over. A bot that has been
-tampered with can ask for the keys to the building as often as it likes and will
-keep holding exactly what an admin agreed to. If a bot genuinely needs more, an
-admin makes a new registration.
+That's about the run that is *not* yours, after a published image has been
+taken over. A tampered bot can ask for the keys to the building as often as it
+likes. It keeps holding exactly what an admin agreed to until one says yes.
 
 ## What it won't do for you
 
