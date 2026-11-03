@@ -12,5 +12,7 @@ export type {
   Member,
   Message,
   Permission,
+  SearchHit,
   ServerInfo,
+  ThreadSummary,
 } from "./types.ts";
