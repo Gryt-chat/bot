@@ -523,6 +523,9 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     });
 
     socket.on("disconnect", (reason: string) => {
+      // The reconnect joins on its own; a pending knock would make it two.
+      if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+      this.rejoinTimer = null;
       this.accessToken = null;
       this.emit("disconnected", reason);
     });
