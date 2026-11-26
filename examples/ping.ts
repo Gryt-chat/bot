@@ -47,7 +47,7 @@ bot.on("ready", (info) =>
   ),
 );
 
-// Not awaited: on a first run there is nobody to answer yet, so the bot sits at the door.
+// Not awaited: on a first run the bot waits at the door, knocking every 15 seconds until an admin approves it.
 // The catch is not optional — `start()` rejects, and an unhandled rejection ends the process.
 bot.start().catch(() => {});
 

@@ -74,6 +74,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 /** Refresh a little before the 15-minute access token actually expires. */
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
+const WAITING_REJOIN_MS = 15_000;
 
 function httpBase(host: string, secure?: boolean): string {
   if (/^https?:\/\//.test(host)) return host.replace(/\/+$/, "");
@@ -124,6 +125,7 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
+  private rejoinTimer: NodeJS.Timeout | null = null;
 
   private info: ServerInfo | null = null;
   private permissionSet = new Set<Permission>();
@@ -244,6 +246,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     this.stopped = true;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
+    if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+    this.rejoinTimer = null;
     this.connection?.disconnect();
     this.connection = null;
   }
@@ -519,6 +523,9 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     });
 
     socket.on("disconnect", (reason: string) => {
+      // The reconnect joins on its own; a pending knock would make it two.
+      if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+      this.rejoinTimer = null;
       this.accessToken = null;
       this.emit("disconnected", reason);
     });
@@ -528,6 +535,8 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     });
 
     socket.on("server:joined", (payload: { accessToken: string; refreshToken: string }) => {
+      if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+      this.rejoinTimer = null;
       this.accessToken = payload.accessToken;
       this.refreshToken = payload.refreshToken;
       this.rememberSelf(payload.accessToken);
@@ -562,9 +571,11 @@ export class GrytBot extends EventEmitter<GrytBotEvents> {
     socket.on("server:error", (payload: ServerRefusal | string) => {
       const code = typeof payload === "string" ? "" : payload?.error ?? payload?.code;
 
-      // Waiting to be let in is the ordinary first run, not a failure: a bot that crashed
-      // here would knock again on restart. The approval arrives without a reconnect.
+      // Waiting to be let in is the ordinary first run, not a failure. The server does not
+      // tell a waiting socket about the approval, so knock again every few seconds.
       if (code === "bot_not_approved") {
+        if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+        this.rejoinTimer = setTimeout(() => void this.join(socket), WAITING_REJOIN_MS);
         if (!this.announcedWait) {
           this.announcedWait = true;
           this.emit(
